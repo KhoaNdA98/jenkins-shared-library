@@ -1,0 +1,13 @@
+# Add this file to your project root
+.gradle/
+build/
+target/
+*.log
+*.tmp
+.DS_Store
+.idea/
+*.iml
+.vscode/
+*.swp
+*.swo
+*~
