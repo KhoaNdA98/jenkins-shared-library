@@ -1,18 +1,16 @@
 # Jenkins Shared Pipeline Library
 
-A generic, reusable Jenkins Shared Library for building and deploying applications to Kubernetes clusters or Docker environments.
+A generic, reusable Jenkins Shared Library for building and deploying applications to Kubernetes clusters.
 
 ## 🎯 Features
 
-- ✅ **Multi-environment support** (dev, staging, prod)
-- ✅ **Kubernetes deployment** (K3s, K8s, cloud providers)
-- ✅ **Docker registry integration** (local registry, private registries)
-- ✅ **Automatic versioning** with build numbers
-- ✅ **Health checks** after deployment
-- ✅ **Notifications** (Slack, Discord, Teams webhooks)
-- ✅ **Deployment confirmation** for production
-- ✅ **Automatic cleanup** of resources
-- ✅ **Extensible and customizable**
+- ✅ Multi-environment support (dev, staging, prod)
+- ✅ Kubernetes deployment (K3s, K8s, cloud providers)
+- ✅ Docker registry integration (local, cloud, private registries)
+- ✅ Automatic versioning with build numbers
+- ✅ Git authentication (PAT, SSH, public repos)
+- ✅ Health checks after deployment
+- ✅ Extensible and customizable
 
 ## 📦 Installation
 
@@ -22,389 +20,155 @@ A generic, reusable Jenkins Shared Library for building and deploying applicatio
 2. Scroll to **Global Pipeline Libraries**
 3. Click **Add**
 4. Configure:
-   - **Name**: `pipeline-library` (or any name you prefer)
-   - **Default version**: `main` (or your default branch)
+   - **Name**: `pipeline-library` (or your preferred name)
+   - **Default version**: `main`
    - **Retrieval method**: Modern SCM
    - **Source Code Management**: Git
-   - **Project Repository**: `https://github.com/YOUR-USERNAME/jenkins-shared-library`
-   - **Credentials**: (Select your Git credentials if private repo)
+   - **Project Repository**: Your repository URL
+   - **Credentials**: Your Git credentials (if private repo)
 
-### 2. Configure Credentials
+### 2. Configure Jenkins Credentials
 
-Add credentials in Jenkins (**Credentials** → **System** → **Global credentials**):
+Add required credentials in Jenkins (**Credentials** → **System** → **Global credentials**):
 
-- **Git Credentials** (choose any ID you prefer, e.g., `github-pat`, `gitlab-token`)
-  - Type: **Secret text** (for PAT/token) or **SSH Username with private key**
-  - For accessing your Git repositories
-  
-- **Docker Registry Credentials** (choose any ID you prefer, e.g., `docker-registry-credentials`)
-  - Type: **Username with password**
-  - For pushing images to private registries (staging/prod)
+- **Git Credentials**: Secret text (PAT) or SSH key
+- **Docker Registry Credentials**: Username with password (for private registries)
 
-> **💡 Tip**: The library doesn't assume any specific credential IDs. You specify them in your pipeline configuration.
+## 🚀 Usage
 
-## 🚀 Quick Start
-
-### Basic Usage
-
-Create a new Pipeline job in Jenkins with this script:
+### Basic Example
 
 ```groovy
 @Library('pipeline-library') _
 
 buildAndDeploy(
-    // === REQUIRED PARAMETERS ===
-    environment: 'dev',                     // dev, staging, or prod
-    appName: 'my-app',                      // Application name
+    // Required
+    environment: 'dev',
+    appName: 'my-app',
     repo: 'https://github.com/your-org/your-repo.git',
     branch: 'main',
+    registry: 'your-registry-url',
+    kubeconfigPath: '/path/to/kubeconfig',
+    credentialsId: 'your-git-credentials',
     
-    // Registry where Docker images will be pushed - REQUIRED
-    registry: 'localhost:5000',             // Or your registry URL
-    
-    // Path to kubeconfig file in Jenkins - REQUIRED (unless skipDeploy: true)
-    kubeconfigPath: '/var/jenkins_home/.kube/config',
-    
-    // Git credentials - REQUIRED for private repos (null for public)
-    credentialsId: 'github-pat'             // Your Jenkins credential ID
+    // Optional
+    dockerfile: './Dockerfile',
+    deployment: 'my-deployment',
+    namespace: 'dev'
 )
 ```
 
-> **⚠️ Important**: The library is designed to be generic and does not contain hardcoded infrastructure values. You MUST specify `registry` and `kubeconfigPath` in your pipeline configuration.
+## 📋 Required Parameters
 
-### Required Parameters
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `environment` | String | Deployment environment: `'dev'`, `'staging'`, or `'prod'` |
+| `appName` | String | Application name for image naming |
+| `repo` | String | Git repository URL |
+| `registry` | String | Docker registry URL |
+| `kubeconfigPath` | String | Path to kubeconfig file in Jenkins |
+| `credentialsId` | String/null | Git credential ID (null for public repos) |
 
-| Parameter | Type | Description | Example |
-|-----------|------|-------------|---------|
-| `environment` | String | Deployment environment | `'dev'`, `'staging'`, `'prod'` |
-| `appName` | String | Application name (used for image naming) | `'my-api'` |
-| `repo` | String | Git repository URL | `'https://github.com/org/repo.git'` |
-| `registry` | String | Docker registry URL | `'localhost:5000'`, `'gcr.io/project-id'` |
-| `kubeconfigPath` | String | Path to kubeconfig in Jenkins container | `'/var/jenkins_home/.kube/config'` |
-| `credentialsId` | String or null | Jenkins credential ID for Git | `'github-pat'` (or `null` for public repos) |
+**Additional for staging/prod:**
+- `dockerCredentialsId` (String): Docker registry credential ID
 
-**Additional requirements for staging/prod:**
-- `dockerCredentialsId` (String): Jenkins credential ID for Docker registry login
+## 🔧 Optional Parameters
 
-### Full Example with All Options
+### Git Configuration
+- `branch`: Branch name (default: `'main'`)
+- `useSSH`: Use SSH instead of HTTPS (default: `false`)
 
-```groovy
-@Library('pipeline-library') _
+### Docker Build
+- `dockerfile`: Path to Dockerfile (default: `'./Dockerfile'`)
+- `buildContext`: Build context path (default: `'.'`)
+- `platform`: Target platform (default: `'linux/amd64'`)
+- `buildArgs`: Map of build arguments
 
-buildAndDeploy(
-    // === REQUIRED PARAMETERS ===
-    environment: 'prod',                    // dev, staging, or prod
-    appName: 'my-api',                      // Application name
-    repo: 'https://github.com/company/api.git',  // Git repository
-    registry: 'registry.example.com/project',    // Docker registry
-    kubeconfigPath: '/var/jenkins_home/.kube/config',  // Kubeconfig path
-    
-    // === OPTIONAL PARAMETERS ===
-    
-    // Git configuration
-    branch: 'main',                         // Default: 'main'
-    credentialsId: 'github-pat',            // Jenkins credential ID (or null for public repos)
-    
-    // Optional - Docker Build
-    dockerfile: './Dockerfile',             // Default: './Dockerfile'
-    buildContext: '.',                      // Default: '.'
-    platform: 'linux/amd64',                // Default: 'linux/amd64'
-    buildArgs: [                            // Additional build arguments
-        NODE_ENV: 'production',
-        API_VERSION: '2.0'
-    ],
-    
-    // Optional - Docker Registry
-    registry: 'registry.example.com',       // Override environment default
-    dockerCredentialsId: 'docker-creds',    // Override environment default
-    tagLatest: true,                        // Also tag as 'latest'
-    
-    // Optional - Versioning
-    version: 'v2.0.1',                      // Override auto-generated version
-    
-    // Optional - Kubernetes Deployment
-    deploymentType: 'kubernetes',           // kubernetes, docker, docker-compose
-    deployment: 'my-api-deployment',        // K8s deployment name
-    namespace: 'production',                // Override environment namespace
-    kubeContext: 'prod-cluster',            // Override environment context
-    containerName: 'api',                   // Container name in pod
-    setImage: true,                         // Update image before rollout
-    waitForRollout: true,                   // Wait for rollout to complete
-    rolloutTimeout: '10m',                  // Rollout timeout
-    
-    // Optional - Health Check
-    healthCheckUrl: 'https://api.example.com/health',
-    healthCheckRetries: 10,                 // Number of retries
-    healthCheckDelay: 10,                   // Delay between retries (seconds)
-    healthCheckExpectedStatus: 200,         // Expected HTTP status
-    
-    // Optional - Scripts
-    preDeployScript: '''
-        echo "Running pre-deployment checks..."
-        # Your custom script here
-    ''',
-    postDeployScript: '''
-        echo "Running post-deployment tasks..."
-        # Your custom script here
-    ''',
-    
-    // Optional - Environment File
-    envFile: true,                          // Create .env file
-    envFilePath: './.env',                  // Path to .env file
-    envContent: '''
-        NODE_ENV=production
-        DATABASE_URL=postgres://...
-        API_KEY=your-api-key
-    ''',
-    
-    // Optional - Notifications
-    notificationWebhook: 'https://hooks.slack.com/services/YOUR/WEBHOOK/URL',
-    
-    // Optional - Cleanup
-    cleanupImages: true,                    // Remove local images after push
-    cleanWorkspace: true,                   // Clean workspace after build
-    
-    // Optional - Control
-    skipDeploy: false,                      // Skip deployment stage
-    skipTests: true                         // Skip test stage
-)
-```
+### Kubernetes Deployment
+- `deployment`: Deployment name (default: appName)
+- `namespace`: K8s namespace (default: environment)
+- `kubeContext`: K8s context name
+- `containerName`: Container name (default: appName)
+- `setImage`: Update image before rollout (default: `true`)
+- `waitForRollout`: Wait for rollout completion (default: `true`)
+- `rolloutTimeout`: Timeout duration (default: `'5m'`)
 
-## 📋 Environment Configuration
+### Environment File
+- `envFile`: Create .env file (default: `false`)
+- `envFilePath`: Path for .env file
+- `envContent`: Content for .env file
 
-The library comes with three pre-configured environments with the following behaviors:
+### Other Options
+- `version`: Override auto-generated version
+- `skipDeploy`: Skip deployment stage (default: `false`)
+- `skipHealthCheck`: Skip health check (default: `false`)
+- `cleanupImages`: Remove local images after push (default: `false`)
 
-### Development (dev)
-- **Registry**: ❌ Not set (must specify in pipeline)
-- **Namespace**: `dev`
-- **Context**: `dev`
-- **Registry Login**: Not required (can be overridden)
-- **Confirmation**: Not required
-- **Cleanup Images**: Disabled
+## 📚 Environment Configuration
+
+The library supports three pre-configured environments:
+
+### Development
+- Namespace: `dev`
+- Requires confirmation: No
+- Cleanup images: No
 
 ### Staging
-- **Registry**: ❌ Not set (must specify in pipeline)
-- **Namespace**: `staging`
-- **Context**: `staging`
-- **Registry Login**: Required
-- **Docker Credentials**: ❌ Not set (must specify in pipeline)
-- **Confirmation**: Not required
-- **Cleanup Images**: Enabled
+- Namespace: `staging`
+- Requires registry login: Yes
+- Requires confirmation: No
+- Cleanup images: Yes
 
-### Production (prod)
-- **Registry**: ❌ Not set (must specify in pipeline)
-- **Namespace**: `prod`
-- **Context**: `prod`
-- **Registry Login**: Required
-- **Docker Credentials**: ❌ Not set (must specify in pipeline)
-- **Confirmation**: Required ✅ (manual approval needed)
-- **Cleanup Images**: Enabled
+### Production
+- Namespace: `prod`
+- Requires registry login: Yes
+- **Requires manual confirmation**: Yes ⚠️
+- Cleanup images: Yes
 
-> **📝 Note**: All infrastructure-specific values (registry, kubeconfigPath, credentials) must be explicitly provided in your pipeline configuration. This ensures the library remains generic and can be used across different projects and organizations.
-
-## 🔧 Customization
-
-### Override in Pipeline
-
-You don't need to edit the library code! Simply override any value in your pipeline:
-
-```groovy
-@Library('pipeline-library') _
-
-buildAndDeploy(
-    environment: 'prod',
-    appName: 'my-api',
-    repo: 'https://github.com/your-org/repo.git',
-    
-    // Override registry settings
-    registry: 'your-registry.example.com/project',
-    dockerCredentialsId: 'your-docker-credentials',
-    
-    // Override Kubernetes settings
-    kubeconfigPath: '/custom/path/to/kubeconfig',
-    namespace: 'custom-namespace',
-    kubeContext: 'your-cluster-context',
-    
-    // ... other options ...
-    cleanupImages: true,
-    imageNameTemplate: '{{appName}}-prod'
-]
-```
-
-### Add New Environment
-
-Add a new environment in `EnvironmentConfig.groovy`:
-
-```groovy
-'uat': [
-    registry: 'uat-registry.example.com',
-    namespace: 'uat',
-    kubeContext: 'uat',
-    requiresRegistryLogin: true,
-    requiresConfirmation: false,
-    cleanupImages: true
-]
-```
-
-## 📚 Real-World Examples
-
-### Example 1: Simple NodeJS API (Dev)
-
-```groovy
-@Library('pipeline-library') _
-
-buildAndDeploy(
-    environment: 'dev',
-    appName: 'nodejs-api',
-    repo: 'https://github.com/company/nodejs-api.git',
-    branch: 'develop',
-    deployment: 'nodejs-api'
-)
-```
-
-### Example 2: React Frontend with Environment Variables
-
-```groovy
-@Library('pipeline-library') _
-
-buildAndDeploy(
-    environment: 'prod',
-    appName: 'react-app',
-    repo: 'https://github.com/company/react-app.git',
-    branch: 'main',
-    
-    envFile: true,
-    envContent: '''
-        REACT_APP_API_URL=https://api.example.com
-        REACT_APP_ENV=production
-        REACT_APP_VERSION=1.0.0
-    ''',
-    
-    healthCheckUrl: 'https://app.example.com',
-    notificationWebhook: 'https://hooks.slack.com/...'
-)
-```
-
-### Example 3: Microservice with Custom Dockerfile
-
-```groovy
-@Library('pipeline-library') _
-
-buildAndDeploy(
-    environment: 'prod',
-    appName: 'payment-service',
-    repo: 'https://github.com/company/payment-service.git',
-    branch: 'release',
-    
-    dockerfile: './docker/Dockerfile.prod',
-    buildContext: './services/payment',
-    buildArgs: [
-        SERVICE_VERSION: '2.1.0',
-        BUILD_ENV: 'production'
-    ],
-    
-    deployment: 'payment-service',
-    namespace: 'production',
-    containerName: 'payment',
-    
-    healthCheckUrl: 'https://payment.example.com/health',
-    healthCheckRetries: 20,
-    healthCheckDelay: 5
-)
-```
-
-### Example 4: With Pre/Post Deploy Scripts
-
-```groovy
-@Library('pipeline-library') _
-
-buildAndDeploy(
-    environment: 'prod',
-    appName: 'database-api',
-    repo: 'https://github.com/company/database-api.git',
-    
-    preDeployScript: '''
-        echo "Running database migrations..."
-        kubectl exec -it migration-pod -- npm run migrate
-    ''',
-    
-    postDeployScript: '''
-        echo "Warming up cache..."
-        curl -X POST https://api.example.com/admin/cache/warm
-    ''',
-    
-    healthCheckUrl: 'https://api.example.com/health'
-)
-```
-
-## 🏗️ Project Structure
+## 🏗️ Library Structure
 
 ```
 jenkins-shared-library/
-├── vars/                           # Pipeline steps (callable from Jenkinsfile)
-│   ├── buildAndDeploy.groovy      # Main entry point
-│   ├── checkoutCode.groovy        # Git checkout
-│   ├── dockerBuild.groovy         # Docker build
-│   ├── dockerPushImage.groovy     # Docker push
-│   ├── deployApplication.groovy   # Deployment orchestration
-│   ├── kubernetesRollout.groovy   # K8s rollout restart
-│   ├── healthCheck.groovy         # Health check verification
-│   ├── sendNotification.groovy    # Send notifications
-│   └── cleanup.groovy             # Cleanup resources
-│
-├── src/org/pipeline/              # Groovy classes
-│   ├── deployers/
-│   │   └── KubernetesDeployer.groovy
+├── vars/                    # Pipeline functions
+│   ├── buildAndDeploy.groovy
+│   ├── checkoutCode.groovy
+│   ├── dockerBuild.groovy
+│   ├── dockerPushImage.groovy
+│   ├── deployApplication.groovy
+│   ├── kubernetesRollout.groovy
+│   ├── healthCheck.groovy
+│   ├── sendNotification.groovy
+│   └── cleanup.groovy
+├── src/org/pipeline/        # Helper classes
+│   ├── utils/
+│   │   └── EnvironmentConfig.groovy
 │   ├── registries/
 │   │   └── RegistryHandler.groovy
-│   └── utils/
-│       ├── EnvironmentConfig.groovy
-│       └── PipelineUtils.groovy
-│
-└── resources/                      # Static resources
-    ├── scripts/
-    └── configs/
+│   └── kubernetes/
+│       └── KubernetesDeployer.groovy
+└── resources/               # Optional resources
 ```
 
-## 🔐 Security Best Practices
+## 🔒 Security Notes
 
-1. **Never hardcode credentials** - Always use Jenkins credentials
-2. **Use private registries** for production images
-3. **Enable deployment confirmation** for production
-4. **Implement RBAC** in Kubernetes
-5. **Use secrets** for sensitive environment variables
-6. **Enable image scanning** before deployment
+- Never commit sensitive information (credentials, tokens, IPs) to this repository
+- Use Jenkins credentials for all sensitive data
+- Keep your kubeconfig files secure
+- Use SSH keys instead of PAT tokens when possible
+- Enable manual confirmation for production deployments
 
-## 🐛 Troubleshooting
+## 📖 License
 
-### Issue: "kubectl: command not found"
-
-**Solution**: Install kubectl in Jenkins agent or use a Docker agent with kubectl pre-installed.
-
-### Issue: "Cannot connect to Docker daemon"
-
-**Solution**: Ensure Jenkins user has access to Docker socket or use Docker-in-Docker.
-
-### Issue: "Deployment not found"
-
-**Solution**: Set `createIfNotExists: true` and provide `manifestPath` to create deployment.
-
-### Issue: "Health check failed"
-
-**Solution**: Increase `healthCheckRetries` and `healthCheckDelay`, or check if your health endpoint is correct.
-
-## 📝 License
-
-MIT License - Feel free to use and modify for your projects.
+See [LICENSE](LICENSE) file for details.
 
 ## 🤝 Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Test thoroughly
+5. Submit a pull request
 
 ## 📞 Support
 
-For issues and questions, please open an issue in this repository.
-
----
-
-**Made with ❤️ for the DevOps community**
+For issues or questions, please open an issue in the repository.
