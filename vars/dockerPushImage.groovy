@@ -16,7 +16,7 @@ def call(Map config, Map pipelineConfig, def envConfig) {
         if (envConfig.requiresRegistryLogin) {
             def credentialsId = config.dockerCredentialsId ?: envConfig.dockerCredentialsId
             if (!credentialsId) {
-                error "Docker registry requires login but no credentials provided"
+                error "Docker registry requires login but no dockerCredentialsId provided. Specify dockerCredentialsId in your pipeline config."
             }
             
             withCredentials([usernamePassword(

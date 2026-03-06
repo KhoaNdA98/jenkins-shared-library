@@ -1,6 +1,7 @@
 @Library('pipeline-library') _
 
 // Example pipeline for ClickAPI - DEV environment
+// Copy this to your Jenkins job and customize for your project
 
 buildAndDeploy(
     environment: 'dev',

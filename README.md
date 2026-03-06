@@ -31,15 +31,17 @@ A generic, reusable Jenkins Shared Library for building and deploying applicatio
 
 ### 2. Configure Credentials
 
-Add these credentials in Jenkins (**Credentials** → **System** → **Global credentials**):
+Add credentials in Jenkins (**Credentials** → **System** → **Global credentials**):
 
-- **Git Credentials** (ID: `git-credentials`)
-  - Type: Username with password or SSH key
+- **Git Credentials** (choose any ID you prefer, e.g., `github-pat`, `gitlab-token`)
+  - Type: **Secret text** (for PAT/token) or **SSH Username with private key**
   - For accessing your Git repositories
+  
+- **Docker Registry Credentials** (choose any ID you prefer, e.g., `docker-registry-credentials`)
+  - Type: **Username with password**
+  - For pushing images to private registries (staging/prod)
 
-- **Docker Registry Credentials** (ID: `docker-registry-credentials`)
-  - Type: Username with password
-  - For pushing images to private registries
+> **💡 Tip**: The library doesn't assume any specific credential IDs. You specify them in your pipeline configuration.
 
 ## 🚀 Quick Start
 
@@ -51,12 +53,38 @@ Create a new Pipeline job in Jenkins with this script:
 @Library('pipeline-library') _
 
 buildAndDeploy(
-    environment: 'dev',
-    appName: 'my-app',
+    // === REQUIRED PARAMETERS ===
+    environment: 'dev',                     // dev, staging, or prod
+    appName: 'my-app',                      // Application name
     repo: 'https://github.com/your-org/your-repo.git',
-    branch: 'main'
+    branch: 'main',
+    
+    // Registry where Docker images will be pushed - REQUIRED
+    registry: 'localhost:5000',             // Or your registry URL
+    
+    // Path to kubeconfig file in Jenkins - REQUIRED (unless skipDeploy: true)
+    kubeconfigPath: '/var/jenkins_home/.kube/config',
+    
+    // Git credentials - REQUIRED for private repos (null for public)
+    credentialsId: 'github-pat'             // Your Jenkins credential ID
 )
 ```
+
+> **⚠️ Important**: The library is designed to be generic and does not contain hardcoded infrastructure values. You MUST specify `registry` and `kubeconfigPath` in your pipeline configuration.
+
+### Required Parameters
+
+| Parameter | Type | Description | Example |
+|-----------|------|-------------|---------|
+| `environment` | String | Deployment environment | `'dev'`, `'staging'`, `'prod'` |
+| `appName` | String | Application name (used for image naming) | `'my-api'` |
+| `repo` | String | Git repository URL | `'https://github.com/org/repo.git'` |
+| `registry` | String | Docker registry URL | `'localhost:5000'`, `'gcr.io/project-id'` |
+| `kubeconfigPath` | String | Path to kubeconfig in Jenkins container | `'/var/jenkins_home/.kube/config'` |
+| `credentialsId` | String or null | Jenkins credential ID for Git | `'github-pat'` (or `null` for public repos) |
+
+**Additional requirements for staging/prod:**
+- `dockerCredentialsId` (String): Jenkins credential ID for Docker registry login
 
 ### Full Example with All Options
 
@@ -64,14 +92,18 @@ buildAndDeploy(
 @Library('pipeline-library') _
 
 buildAndDeploy(
-    // Required
+    // === REQUIRED PARAMETERS ===
     environment: 'prod',                    // dev, staging, or prod
     appName: 'my-api',                      // Application name
     repo: 'https://github.com/company/api.git',  // Git repository
+    registry: 'registry.example.com/project',    // Docker registry
+    kubeconfigPath: '/var/jenkins_home/.kube/config',  // Kubeconfig path
     
-    // Optional - Git
+    // === OPTIONAL PARAMETERS ===
+    
+    // Git configuration
     branch: 'main',                         // Default: 'main'
-    credentialsId: 'git-credentials',       // Default: 'git-credentials'
+    credentialsId: 'github-pat',            // Jenkins credential ID (or null for public repos)
     
     // Optional - Docker Build
     dockerfile: './Dockerfile',             // Default: './Dockerfile'
@@ -140,47 +172,60 @@ buildAndDeploy(
 
 ## 📋 Environment Configuration
 
-The library comes with three pre-configured environments that you can customize:
+The library comes with three pre-configured environments with the following behaviors:
 
 ### Development (dev)
-- **Registry**: `localhost:5000`
+- **Registry**: ❌ Not set (must specify in pipeline)
 - **Namespace**: `dev`
 - **Context**: `dev`
-- **Registry Login**: Not required
+- **Registry Login**: Not required (can be overridden)
 - **Confirmation**: Not required
-- **Cleanup**: Disabled
+- **Cleanup Images**: Disabled
 
 ### Staging
-- **Registry**: `registry.example.com`
+- **Registry**: ❌ Not set (must specify in pipeline)
 - **Namespace**: `staging`
 - **Context**: `staging`
 - **Registry Login**: Required
+- **Docker Credentials**: ❌ Not set (must specify in pipeline)
 - **Confirmation**: Not required
-- **Cleanup**: Enabled
+- **Cleanup Images**: Enabled
 
 ### Production (prod)
-- **Registry**: `registry.example.com`
-- **Namespace**: `production`
-- **Context**: `production`
+- **Registry**: ❌ Not set (must specify in pipeline)
+- **Namespace**: `prod`
+- **Context**: `prod`
 - **Registry Login**: Required
-- **Confirmation**: Required ✅
-- **Cleanup**: Enabled
+- **Docker Credentials**: ❌ Not set (must specify in pipeline)
+- **Confirmation**: Required ✅ (manual approval needed)
+- **Cleanup Images**: Enabled
+
+> **📝 Note**: All infrastructure-specific values (registry, kubeconfigPath, credentials) must be explicitly provided in your pipeline configuration. This ensures the library remains generic and can be used across different projects and organizations.
 
 ## 🔧 Customization
 
-### Customize Environment Configuration
+### Override in Pipeline
 
-Edit `src/org/pipeline/utils/EnvironmentConfig.groovy`:
+You don't need to edit the library code! Simply override any value in your pipeline:
 
 ```groovy
-'prod': [
-    registry: 'your-registry.example.com',
-    namespace: 'production',
-    kubeContext: 'prod-cluster',
-    kubeconfigPath: '/var/jenkins_home/.kube/config',
-    requiresRegistryLogin: true,
+@Library('pipeline-library') _
+
+buildAndDeploy(
+    environment: 'prod',
+    appName: 'my-api',
+    repo: 'https://github.com/your-org/repo.git',
+    
+    // Override registry settings
+    registry: 'your-registry.example.com/project',
     dockerCredentialsId: 'your-docker-credentials',
-    requiresConfirmation: true,
+    
+    // Override Kubernetes settings
+    kubeconfigPath: '/custom/path/to/kubeconfig',
+    namespace: 'custom-namespace',
+    kubeContext: 'your-cluster-context',
+    
+    // ... other options ...
     cleanupImages: true,
     imageNameTemplate: '{{appName}}-prod'
 ]

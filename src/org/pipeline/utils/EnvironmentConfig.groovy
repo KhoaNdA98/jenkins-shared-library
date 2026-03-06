@@ -14,11 +14,12 @@ class EnvironmentConfig implements Serializable {
     Map getConfig(String environment) {
         def configs = [
             'dev': [
-                registry: 'localhost:5000',
+                registry: null,  // REQUIRED: Specify in pipeline (e.g., 'localhost:5000' or 'your-registry.com')
                 namespace: 'dev',
                 kubeContext: 'dev',
-                kubeconfigPath: '/var/jenkins_home/.kube/config',
+                kubeconfigPath: null,  // REQUIRED: Specify in pipeline (e.g., '/var/jenkins_home/.kube/config')
                 requiresRegistryLogin: false,
+                dockerCredentialsId: null,  // Optional: Set if registry requires login
                 requiresConfirmation: false,
                 cleanupImages: false,
                 imageNameTemplate: '{{appName}}',  // Simple naming for dev
@@ -26,12 +27,12 @@ class EnvironmentConfig implements Serializable {
             ],
             
             'staging': [
-                registry: 'registry.example.com',
+                registry: null,  // REQUIRED: Specify in pipeline (e.g., 'registry.example.com/project')
                 namespace: 'staging',
                 kubeContext: 'staging',
-                kubeconfigPath: '/var/jenkins_home/.kube/config',
+                kubeconfigPath: null,  // REQUIRED: Specify in pipeline
                 requiresRegistryLogin: true,
-                dockerCredentialsId: 'docker-registry-credentials',
+                dockerCredentialsId: null,  // REQUIRED if requiresRegistryLogin: true
                 requiresConfirmation: false,
                 cleanupImages: true,
                 imageNameTemplate: '{{appName}}-staging',
@@ -39,12 +40,12 @@ class EnvironmentConfig implements Serializable {
             ],
             
             'prod': [
-                registry: 'registry.example.com',
-                namespace: 'production',
-                kubeContext: 'production',
-                kubeconfigPath: '/var/jenkins_home/.kube/config',
+                registry: null,  // REQUIRED: Specify in pipeline
+                namespace: 'prod',
+                kubeContext: 'prod',
+                kubeconfigPath: null,  // REQUIRED: Specify in pipeline
                 requiresRegistryLogin: true,
-                dockerCredentialsId: 'docker-registry-credentials',
+                dockerCredentialsId: null,  // REQUIRED if requiresRegistryLogin: true
                 requiresConfirmation: true,
                 cleanupImages: true,
                 imageNameTemplate: '{{appName}}-prod',

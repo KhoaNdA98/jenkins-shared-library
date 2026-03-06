@@ -11,7 +11,7 @@
  */
 def call(Map config) {
     def branch = config.branch ?: 'main'
-    def credentialsId = config.credentialsId ?: 'github-pat'
+    def credentialsId = config.credentialsId  // No default - must be specified or null for public repos
     
     echo "Checking out ${config.repo} (branch: ${branch})"
     
@@ -36,10 +36,10 @@ def call(Map config) {
         else if (credentialsId) {
             echo "Using HTTPS with Personal Access Token"
             
-            withCredentials([usernamePassword(
+            // Support both Secret text and Username/Password credential types
+            withCredentials([string(
                 credentialsId: credentialsId,
-                usernameVariable: 'GIT_USERNAME',
-                passwordVariable: 'GIT_TOKEN'
+                variable: 'GIT_TOKEN'
             )]) {
                 // Use x-access-token format (GitHub standard)
                 def repoUrl = config.repo
@@ -85,11 +85,23 @@ def call(Map config) {
 }
 
 /**
- * Convert HTTPS URL to SSH format
+ * Convert HTTPS URL to SSH format (supports GitHub, GitLab, Bitbucket, and custom Git servers)
  */
 def convertToSSH(String httpsUrl) {
-    return httpsUrl
-        .replaceAll('https://github.com/', 'git@github.com:')
-        .replaceAll('http://github.com/', 'git@github.com:')
-        .replaceAll('.git$', '') + '.git'
+    // Extract domain and path from HTTPS URL
+    def cleaned = httpsUrl
+        .replaceAll('^https?://', '')  // Remove http:// or https://
+        .replaceAll('.git$', '')        // Remove .git suffix if present
+    
+    // Split into domain and path
+    def parts = cleaned.split('/', 2)
+    if (parts.size() < 2) {
+        error "Invalid Git URL format: ${httpsUrl}"
+    }
+    
+    def domain = parts[0]
+    def path = parts[1]
+    
+    // Convert to SSH format: git@domain:path.git
+    return "git@${domain}:${path}.git"
 }

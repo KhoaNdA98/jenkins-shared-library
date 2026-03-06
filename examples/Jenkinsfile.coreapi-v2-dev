@@ -1,25 +1,39 @@
 @Library('pipeline-library') _
 
 // Example pipeline for CoreAPI-v2 - DEV environment
-// Copy this to your Jenkins job configuration
+// Copy this to your Jenkins job configuration and update values for your environment
 
 buildAndDeploy(
-    // Environment
+    // === REQUIRED PARAMETERS ===
+    
+    // Environment: dev, staging, or prod
     environment: 'dev',
     
-    // Application info
+    // Application name (used for image naming)
     appName: 'coreapi-v2',
+    
+    // Git repository URL
     repo: 'https://github.com/clickaivn/clickai-dify.git',
     branch: 'feat/login_wrapper',
+    
+    // Git credentials (Jenkins credential ID)
+    // Use your Jenkins credential: Secret text (PAT), SSH key, or null for public repos
     credentialsId: 'github-pat',
+    
+    // Docker registry - REQUIRED
+    // Examples: 'localhost:5000', 'registry.example.com', '123456789.dkr.ecr.region.amazonaws.com'
+    registry: 'localhost:5000',
+    
+    // Kubernetes config path - REQUIRED
+    // Path to kubeconfig file in Jenkins container
+    kubeconfigPath: '/var/jenkins_home/.kube/config',
+    
+    // === OPTIONAL PARAMETERS ===
     
     // Docker build
     dockerfile: './api/Dockerfile',
     buildContext: './api',
     platform: 'linux/amd64',
-    
-    // Docker registry (auto from environment config)
-    // Dev: localhost:5000
     
     // Kubernetes deployment
     deployment: 'clickai-coreapi-v2',

@@ -183,6 +183,7 @@ def buildPipelineConfig(Map config, def envConfig) {
 }
 
 def validateConfig(Map config) {
+    // Validate required fields
     def required = ['environment', 'appName', 'repo']
     required.each { field ->
         if (!config[field]) {
@@ -190,8 +191,48 @@ def validateConfig(Map config) {
         }
     }
     
+    // Validate environment
     def validEnvironments = ['dev', 'staging', 'prod']
     if (!(config.environment in validEnvironments)) {
         error "Invalid environment: ${config.environment}. Must be one of: ${validEnvironments.join(', ')}"
+    }
+    
+    // Validate registry is provided (either in config or as parameter)
+    def envConfig = new org.pipeline.utils.EnvironmentConfig().getConfig(config.environment)
+    def registry = config.registry ?: envConfig.registry
+    if (!registry) {
+        error """
+Missing required configuration: 'registry'
+
+You must specify a Docker registry in your pipeline configuration:
+  registry: 'your-registry.example.com'  // Or 'localhost:5000' for local dev
+
+Examples:
+  - Local registry: 'localhost:5000'
+  - Docker Hub: 'your-dockerhub-username'
+  - AWS ECR: '123456789.dkr.ecr.us-east-1.amazonaws.com'
+  - GCR: 'gcr.io/your-project-id'
+  - Custom: 'registry.example.com/project'
+        """
+    }
+    
+    // Validate kubeconfigPath for deployment
+    if (config.skipDeploy != true) {
+        def kubeconfigPath = config.kubeconfigPath ?: envConfig.kubeconfigPath
+        if (!kubeconfigPath) {
+            error """
+Missing required configuration: 'kubeconfigPath'
+
+You must specify the path to your Kubernetes config file:
+  kubeconfigPath: '/path/to/your/kubeconfig'
+
+Common examples:
+  - Jenkins container: '/var/jenkins_home/.kube/config'
+  - Local: '\$HOME/.kube/config' or '/root/.kube/config'
+  - Custom path: '/path/to/custom-kubeconfig.yaml'
+
+Tip: Mount your kubeconfig file into Jenkins container.
+            """
+        }
     }
 }

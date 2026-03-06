@@ -17,7 +17,11 @@ def call(Map config, Map pipelineConfig, def envConfig) {
     echo "  Deployment: ${deployment}"
     
     try {
-        def kubeconfigPath = config.kubeconfigPath ?: envConfig.kubeconfigPath ?: '/var/jenkins_home/.kube/config'
+        def kubeconfigPath = config.kubeconfigPath ?: envConfig.kubeconfigPath
+        
+        if (!kubeconfigPath) {
+            error "kubeconfigPath is required. Specify in pipeline config or environment config."
+        }
         
         def kubectlCmd = "kubectl --kubeconfig=${kubeconfigPath}"
         if (kubeContext) {
