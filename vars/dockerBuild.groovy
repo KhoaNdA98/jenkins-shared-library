@@ -26,6 +26,7 @@ def call(Map config, Map pipelineConfig) {
         sh """
             docker buildx build \
                 --platform ${platform} \
+                --load \
                 -t ${pipelineConfig.fullImageName} \
                 --build-arg BUILD_VERSION=${pipelineConfig.version} \
                 --build-arg BUILD_NUMBER=${env.BUILD_NUMBER} \
