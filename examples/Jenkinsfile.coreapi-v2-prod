@@ -1,0 +1,42 @@
+@Library('pipeline-library') _
+
+// Example pipeline for CoreAPI-v2 - PRODUCTION environment
+// Copy this to your Jenkins job configuration
+
+buildAndDeploy(
+    // Environment
+    environment: 'prod',
+    
+    // Application info
+    appName: 'coreapi-v2',
+    repo: 'https://github.com/clickaivn/clickai-dify.git',
+    branch: 'main',
+    credentialsId: 'github-pat',
+    
+    // Docker build
+    dockerfile: './api/Dockerfile',
+    buildContext: './api',
+    platform: 'linux/amd64',
+    
+    // Docker registry
+    registry: 'k8s.io.reg.vnetwork.dev/clickai',
+    dockerCredentialsId: 'docker-registry-credentials',
+    
+    // Kubernetes deployment
+    deployment: 'clickai-prod-coreapi-v2',
+    namespace: 'prod',
+    kubeContext: 'prod',
+    containerName: 'coreapi-v2',
+    
+    // Deployment options
+    setImage: true,
+    waitForRollout: true,
+    rolloutTimeout: '10m',
+    
+    // Health check (optional)
+    // healthCheckUrl: 'https://api.clickai.io/health',
+    // healthCheckRetries: 10,
+    
+    // Notification (optional)
+    // notificationWebhook: 'https://hooks.slack.com/services/YOUR/WEBHOOK/URL'
+)

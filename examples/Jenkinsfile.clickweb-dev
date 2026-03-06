@@ -1,0 +1,35 @@
+@Library('pipeline-library') _
+
+// Example pipeline for ClickWeb - DEV environment with .env file
+
+buildAndDeploy(
+    environment: 'dev',
+    appName: 'clickweb',
+    repo: 'https://github.com/clickaivn/webapp.git',
+    branch: 'feat/new-dify',
+    credentialsId: 'github-pat',
+    
+    // Create .env file before build
+    envFile: true,
+    envFilePath: './.env',
+    envContent: '''
+NEXT_PUBLIC_ENDPOINT_COMMUNITY=/community/api
+NEXT_PUBLIC_ENDPOINT_ASSISTANCE=/assistant/api
+NEXT_PUBLIC_ENDPOINT_AUTH=/auth/api
+NEXT_PUBLIC_ENDPOINT_SERVICE=/service/api
+NEXT_PUBLIC_ENDPOINT_CONVERSATION=/conversation/api
+NEXT_PUBLIC_ENDPOINT_CONSOLE=/console/api
+NEXT_PUBLIC_ENDPOINT_PAYMENT=/community/api/payment
+NEXT_PUBLIC_ENDPOINT_CREDIT=/credit/api
+NEXT_PUBLIC_ENDPOINT_CREATIVE=/creative/api
+NEXT_PUBLIC_GA_ID=G-7Q55V1FHCJ
+NEXT_PUBLIC_DOMAIN_TYPE=DEV
+    ''',
+    
+    dockerfile: './Dockerfile',
+    buildContext: '.',
+    
+    deployment: 'clickai-clickweb',
+    namespace: 'dev',
+    containerName: 'clickweb'
+)

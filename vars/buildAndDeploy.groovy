@@ -31,19 +31,19 @@ def call(Map config) {
     pipeline {
         agent any
         
-        environment {
-            VERSION = pipelineConfig.version
-            IMAGE_NAME = pipelineConfig.imageName
-            FULL_IMAGE_NAME = pipelineConfig.fullImageName
-            APP_NAME = config.appName
-            ENVIRONMENT = config.environment
-        }
-        
         stages {
             stage('Validation') {
                 steps {
                     script {
                         validateConfig(config)
+                        
+                        // Set environment variables dynamically
+                        env.VERSION = pipelineConfig.version
+                        env.IMAGE_NAME = pipelineConfig.imageName
+                        env.FULL_IMAGE_NAME = pipelineConfig.fullImageName
+                        env.APP_NAME = config.appName
+                        env.ENVIRONMENT = config.environment
+                        
                         echo "==================================="
                         echo "Pipeline Configuration:"
                         echo "App: ${config.appName}"
