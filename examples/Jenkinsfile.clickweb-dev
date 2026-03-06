@@ -1,13 +1,38 @@
 @Library('pipeline-library') _
 
 // Example pipeline for ClickWeb - DEV environment with .env file
+// Copy this to your Jenkins job and customize for your environment
 
 buildAndDeploy(
+    // === REQUIRED PARAMETERS ===
+    
+    // Environment
     environment: 'dev',
+    
+    // Application name (used for image naming)
     appName: 'clickweb',
+    
+    // Git repository
     repo: 'https://github.com/clickaivn/webapp.git',
     branch: 'feat/new-dify',
+    
+    // Git credentials (Jenkins credential ID)
     credentialsId: 'github-pat',
+    
+    // Docker registry - REQUIRED
+    // For dev: typically 'localhost:5000' for local registry
+    // For prod: 'registry.example.com' or cloud registry URL
+    registry: 'localhost:5000',
+    
+    // Kubernetes config path - REQUIRED
+    // Path to kubeconfig file in Jenkins container
+    kubeconfigPath: '/var/jenkins_home/.kube/config',
+    
+    // === OPTIONAL PARAMETERS ===
+    
+    // Docker build configuration
+    dockerfile: './Dockerfile',
+    buildContext: '.',
     
     // Create .env file before build
     envFile: true,
@@ -26,9 +51,7 @@ NEXT_PUBLIC_GA_ID=G-7Q55V1FHCJ
 NEXT_PUBLIC_DOMAIN_TYPE=DEV
     ''',
     
-    dockerfile: './Dockerfile',
-    buildContext: '.',
-    
+    // Kubernetes deployment
     deployment: 'clickai-clickweb',
     namespace: 'dev',
     containerName: 'clickweb'
