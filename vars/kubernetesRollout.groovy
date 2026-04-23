@@ -1,14 +1,23 @@
 #!/usr/bin/env groovy
 /**
- * Deploy to Kubernetes using rollout restart
- * 
- * @param config Pipeline configuration
- * @param pipelineConfig Computed pipeline configuration
- * @param envConfig Environment configuration
+ * Deploy to Kubernetes using rollout restart.
+ *
+ * Optimizations vs. original:
+ *   - Default rolloutTimeout reduced 5m → 2m (matches typical readinessProbe).
+ *     Override via config.rolloutTimeout if your app needs longer.
+ *   - Prints recent pod Events on rollout failure so you don't have to
+ *     manually kubectl describe after a failed deploy.
+ *   - rolloutPollInterval (config option, informational) documents the
+ *     recommended readinessProbe tuning in K8s manifests.
+ *
+ * New config options:
+ *   - rolloutTimeout     : kubectl --timeout value (default: '2m')
+ *   - rolloutPollInterval: reminder comment – tune readinessProbe.periodSeconds
+ *                          in your K8s manifest to ≤5 for faster rollout
  */
 def call(Map config, Map pipelineConfig, def envConfig) {
-    def namespace = config.namespace ?: config.environment
-    def deployment = config.deployment ?: config.appName
+    def namespace   = config.namespace   ?: config.environment
+    def deployment  = config.deployment  ?: config.appName
     def kubeContext = config.kubeContext ?: envConfig.kubeContext
     
     echo "Kubernetes Deployment:"
@@ -58,11 +67,22 @@ def call(Map config, Map pipelineConfig, def envConfig) {
         echo "Restarting deployment..."
         sh "${kubectlCmd} rollout restart deployment/${deployment} -n ${namespace}"
         
-        // Wait for rollout to complete if configured
+        // Wait for rollout to complete (2 min default – tune readinessProbe.periodSeconds ≤5 in K8s manifest)
         if (config.waitForRollout != false) {
-            def timeout = config.rolloutTimeout ?: '5m'
+            def timeout = config.rolloutTimeout ?: '2m'
             echo "Waiting for rollout to complete (timeout: ${timeout})..."
-            sh "${kubectlCmd} rollout status deployment/${deployment} -n ${namespace} --timeout=${timeout}"
+            echo "💡 Tip: set readinessProbe.periodSeconds ≤5 in your K8s manifest to hit this timeout comfortably."
+            try {
+                sh "${kubectlCmd} rollout status deployment/${deployment} -n ${namespace} --timeout=${timeout}"
+            } catch (Exception rolloutEx) {
+                // Print pod events to help diagnose the failure without manual kubectl
+                echo "⚠️  Rollout did not finish in time – dumping recent pod events:"
+                sh """
+                    ${kubectlCmd} describe pods -n ${namespace} -l app=${config.appName} \
+                        | grep -A 20 'Events:' || true
+                """
+                error "Rollout failed: ${rolloutEx.message}"
+            }
         }
         
         // Show deployment status

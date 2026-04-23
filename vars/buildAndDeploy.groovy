@@ -22,6 +22,18 @@
  *   - skipDeploy: Skip deployment stage (boolean, default: false)
  *   - buildArgs: Docker build arguments (Map, optional)
  *   - skipTests: Skip test stage (boolean, default: true)
+ *
+ * NEW options (performance optimizations):
+ *   - lintAndTypecheck  : Run lint + typecheck before Docker build (boolean, default: false)
+ *   - lintScript        : Lint command (default: 'yarn lint')
+ *   - typecheckScript   : Typecheck command (default: 'yarn tsc --noEmit')
+ *   - skipLint          : Skip only lint within the stage (boolean, default: false)
+ *   - skipTypecheck     : Skip only typecheck within the stage (boolean, default: false)
+ *   - nodeImage         : Node Docker image for lint runner (default: 'node:20.14-alpine')
+ *   - enableBuildCache  : Enable BuildKit registry cache backend (boolean, default: true)
+ *   - cacheRegistry     : Registry used for cache blobs (default: same as config.registry)
+ *   - cacheTag          : Tag for cache image (default: 'buildcache-<appName>')
+ *   - rolloutTimeout    : kubectl rollout timeout (default: '2m')
  */
 def call(Map config) {
     // Load configuration
@@ -95,6 +107,20 @@ def call(Map config) {
                 }
             }
             
+            stage('Lint & Typecheck') {
+                when {
+                    // Opt-in: set lintAndTypecheck: true in your Jenkinsfile to enable.
+                    // When enabled this stage runs BEFORE Docker build so a lint failure
+                    // aborts the pipeline without wasting BuildKit time.
+                    expression { return config.lintAndTypecheck == true }
+                }
+                steps {
+                    script {
+                        lintAndTypecheck(config)
+                    }
+                }
+            }
+
             stage('Build Image') {
                 steps {
                     script {
