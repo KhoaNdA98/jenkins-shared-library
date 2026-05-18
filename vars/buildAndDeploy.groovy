@@ -72,7 +72,9 @@ def call(Map config) {
             stage('Checkout') {
                 steps {
                     script {
-                        cleanWs()
+                        if (config.cleanWorkspace == true) {
+                            cleanWs()
+                        }
                         checkoutCode(config)
                     }
                 }
