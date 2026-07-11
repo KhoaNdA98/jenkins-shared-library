@@ -57,7 +57,7 @@ def call(Map config) {
             
             stage('Confirmation') {
                 when {
-                    expression { return envConfig.requiresConfirmation }
+                    expression { return envConfig.requiresConfirmation && config.skipConfirmation != true }
                 }
                 steps {
                     script {
