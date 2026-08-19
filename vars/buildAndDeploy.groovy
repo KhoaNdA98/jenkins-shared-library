@@ -169,30 +169,40 @@ def call(Map config) {
                             // compile gì (tự tải binary framework build sẵn), nên build được
                             // luôn trong image node:22-slim, không cần thêm lib GTK/WebKit gì
                             // ở bước ĐÓNG GÓI này (chỉ cần lúc CHẠY thật trên máy có desktop).
+                            // `neu build --release` LUÔN build đủ 7 kiến trúc nó hỗ trợ (không
+                            // có flag chọn platform) + 1 file zip tự gói lại y hệt — chỉ 4 cái
+                            // (linux_x64/win_x64/mac_x64/mac_arm64) khớp 4 target backend
+                            // (pkg.targets trong package.json) là thật sự cần, phần còn lại bỏ
+                            // qua lúc gói zip bên dưới (không archive riêng lẻ nữa — trước đây
+                            // archive 9-13 file rời khiến user phải tự tải+ghép nhiều file mới
+                            // chạy được, giờ gói sẵn launcher+resources.neu+backend ĐÚNG CẶP
+                            // platform vào 1 file .zip duy nhất mỗi platform, user chỉ tải 1
+                            // file, giải nén ra là chạy được ngay — đã tự build+zip+unzip -l
+                            // thật để xác nhận nội dung từng zip đúng 3 file cần, không đoán
+                            // suông).
                             sh '''
                                 docker run --rm \
                                     --volumes-from "$HOSTNAME" \
                                     -w "$WORKSPACE" \
                                     node:22-slim \
                                     sh -c "
+                                        apt-get update -qq && apt-get install -y -qq zip &&
                                         npm ci &&
                                         npm run build:binaries &&
                                         cd neutralino-shell &&
                                         npm ci &&
                                         npx neu update &&
-                                        npx neu build --release
+                                        npx neu build --release &&
+                                        cd .. &&
+                                        mkdir -p release-bundles &&
+                                        zip -j release-bundles/ClickAI-Filesystem-Agent-windows-x64.zip neutralino-shell/dist/ClickAI-Filesystem-Agent/ClickAI-Filesystem-Agent-win_x64.exe neutralino-shell/dist/ClickAI-Filesystem-Agent/resources.neu dist/clickai-mcp-win-x64.exe &&
+                                        zip -j release-bundles/ClickAI-Filesystem-Agent-macos-x64.zip neutralino-shell/dist/ClickAI-Filesystem-Agent/ClickAI-Filesystem-Agent-mac_x64 neutralino-shell/dist/ClickAI-Filesystem-Agent/resources.neu dist/clickai-mcp-macos-x64 &&
+                                        zip -j release-bundles/ClickAI-Filesystem-Agent-macos-arm64.zip neutralino-shell/dist/ClickAI-Filesystem-Agent/ClickAI-Filesystem-Agent-mac_arm64 neutralino-shell/dist/ClickAI-Filesystem-Agent/resources.neu dist/clickai-mcp-macos-arm64 &&
+                                        zip -j release-bundles/ClickAI-Filesystem-Agent-linux-x64.zip neutralino-shell/dist/ClickAI-Filesystem-Agent/ClickAI-Filesystem-Agent-linux_x64 neutralino-shell/dist/ClickAI-Filesystem-Agent/resources.neu dist/clickai-mcp-linux-x64
                                     "
                             '''
-                            // `neu build --release` LUÔN build đủ 7 kiến trúc nó hỗ trợ (không
-                            // có flag chọn platform) + 1 file zip tự gói lại y hệt — chỉ 4 cái
-                            // (linux_x64/win_x64/mac_x64/mac_arm64) khớp 4 target backend
-                            // (pkg.targets trong package.json) là thật sự cần; linux_arm64,
-                            // linux_armhf, mac_universal, và file .zip tổng là rác không dùng
-                            // tới (đã tự build+ls thật để xác nhận danh sách, không đoán suông)
-                            // — lọc bớt cho archive khỏi phình.
-                            archiveArtifacts artifacts: 'dist/clickai-mcp-*', fingerprint: true, allowEmptyArchive: true
-                            archiveArtifacts artifacts: 'neutralino-shell/dist/**/*-linux_x64,neutralino-shell/dist/**/*-win_x64.exe,neutralino-shell/dist/**/*-mac_x64,neutralino-shell/dist/**/*-mac_arm64,neutralino-shell/dist/**/resources.neu', fingerprint: true, allowEmptyArchive: true
-                            echo "✅ Built & archived standalone agent binaries + Neutralino shell launchers."
+                            archiveArtifacts artifacts: 'release-bundles/*.zip', fingerprint: true, allowEmptyArchive: true
+                            echo "✅ Built & archived 4 ready-to-run zip bundles (1 file/platform)."
                         } catch (Exception e) {
                             echo "⚠️ Agent binaries build failed (không ảnh hưởng deploy gateway đã xong ở stage trước): ${e.message}"
                             currentBuild.result = 'UNSTABLE'
