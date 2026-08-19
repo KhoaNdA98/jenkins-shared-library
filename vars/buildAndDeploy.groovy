@@ -132,8 +132,40 @@ def call(Map config) {
                     }
                 }
             }
+
+            // Optional, opt-in stage — chỉ chạy khi job truyền config.buildAgentBinaries
+            // = true. Mọi job KHÔNG set flag này (mặc định) đi qua stage này y hệt bản
+            // cũ, hoàn toàn không đổi hành vi — thêm an toàn cho các job khác đang dùng
+            // chung thư viện. Đóng gói mcp-server/ (Node.js) thành 4 binary độc lập
+            // (win/mac-x64/mac-arm64/linux) không liên quan gì Docker/K8s ở trên, nên
+            // build trong 1 container node:22 tạm thời (agent Jenkins không có sẵn
+            // Node.js) — lỗi ở stage này KHÔNG được làm fail cả pipeline (đã deploy
+            // gateway xong ở stage trước là quan trọng nhất, build binary là phụ).
+            stage('Build Agent Binaries') {
+                when {
+                    expression { return config.buildAgentBinaries == true }
+                }
+                steps {
+                    script {
+                        try {
+                            sh '''
+                                docker run --rm \
+                                    -v "$WORKSPACE":/workspace \
+                                    -w /workspace \
+                                    node:22-slim \
+                                    sh -c "npm ci && npm run build:binaries"
+                            '''
+                            archiveArtifacts artifacts: 'dist/clickai-mcp-*', fingerprint: true, allowEmptyArchive: true
+                            echo "✅ Built & archived standalone agent binaries."
+                        } catch (Exception e) {
+                            echo "⚠️ Agent binaries build failed (không ảnh hưởng deploy gateway đã xong ở stage trước): ${e.message}"
+                            currentBuild.result = 'UNSTABLE'
+                        }
+                    }
+                }
+            }
         }
-        
+
         post {
             success {
                 script {
