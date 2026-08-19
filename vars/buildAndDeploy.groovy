@@ -183,8 +183,15 @@ def call(Map config) {
                                         npx neu build --release
                                     "
                             '''
+                            // `neu build --release` LUÔN build đủ 7 kiến trúc nó hỗ trợ (không
+                            // có flag chọn platform) + 1 file zip tự gói lại y hệt — chỉ 4 cái
+                            // (linux_x64/win_x64/mac_x64/mac_arm64) khớp 4 target backend
+                            // (pkg.targets trong package.json) là thật sự cần; linux_arm64,
+                            // linux_armhf, mac_universal, và file .zip tổng là rác không dùng
+                            // tới (đã tự build+ls thật để xác nhận danh sách, không đoán suông)
+                            // — lọc bớt cho archive khỏi phình.
                             archiveArtifacts artifacts: 'dist/clickai-mcp-*', fingerprint: true, allowEmptyArchive: true
-                            archiveArtifacts artifacts: 'neutralino-shell/dist/**/*', fingerprint: true, allowEmptyArchive: true
+                            archiveArtifacts artifacts: 'neutralino-shell/dist/**/*-linux_x64,neutralino-shell/dist/**/*-win_x64.exe,neutralino-shell/dist/**/*-mac_x64,neutralino-shell/dist/**/*-mac_arm64,neutralino-shell/dist/**/resources.neu', fingerprint: true, allowEmptyArchive: true
                             echo "✅ Built & archived standalone agent binaries + Neutralino shell launchers."
                         } catch (Exception e) {
                             echo "⚠️ Agent binaries build failed (không ảnh hưởng deploy gateway đã xong ở stage trước): ${e.message}"
