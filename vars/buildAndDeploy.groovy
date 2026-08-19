@@ -162,15 +162,29 @@ def call(Map config) {
                 steps {
                     script {
                         try {
+                            // Backend (Node, đóng gói qua pkg — không đổi), rồi tới
+                            // neutralino-shell/ — launcher native (cửa sổ + tray) mỏng, tự
+                            // spawn CHÍNH backend vừa build ở trên làm tiến trình con lúc
+                            // chạy thật — xem neutralino-shell/README.md. `neu build` KHÔNG
+                            // compile gì (tự tải binary framework build sẵn), nên build được
+                            // luôn trong image node:22-slim, không cần thêm lib GTK/WebKit gì
+                            // ở bước ĐÓNG GÓI này (chỉ cần lúc CHẠY thật trên máy có desktop).
                             sh '''
                                 docker run --rm \
                                     --volumes-from "$HOSTNAME" \
                                     -w "$WORKSPACE" \
                                     node:22-slim \
-                                    sh -c "npm ci && npm run build:binaries"
+                                    sh -c "
+                                        npm ci &&
+                                        npm run build:binaries &&
+                                        cd neutralino-shell &&
+                                        npm ci &&
+                                        npx neu build --release
+                                    "
                             '''
                             archiveArtifacts artifacts: 'dist/clickai-mcp-*', fingerprint: true, allowEmptyArchive: true
-                            echo "✅ Built & archived standalone agent binaries."
+                            archiveArtifacts artifacts: 'neutralino-shell/dist/**/*', fingerprint: true, allowEmptyArchive: true
+                            echo "✅ Built & archived standalone agent binaries + Neutralino shell launchers."
                         } catch (Exception e) {
                             echo "⚠️ Agent binaries build failed (không ảnh hưởng deploy gateway đã xong ở stage trước): ${e.message}"
                             currentBuild.result = 'UNSTABLE'
