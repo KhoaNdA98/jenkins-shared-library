@@ -179,6 +179,7 @@ def call(Map config) {
                                         npm run build:binaries &&
                                         cd neutralino-shell &&
                                         npm ci &&
+                                        npx neu update &&
                                         npx neu build --release
                                     "
                             '''
