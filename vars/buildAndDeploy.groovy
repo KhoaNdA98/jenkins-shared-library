@@ -141,6 +141,20 @@ def call(Map config) {
             // build trong 1 container node:22 tạm thời (agent Jenkins không có sẵn
             // Node.js) — lỗi ở stage này KHÔNG được làm fail cả pipeline (đã deploy
             // gateway xong ở stage trước là quan trọng nhất, build binary là phụ).
+            //
+            // --volumes-from "$HOSTNAME" (KHÔNG dùng -v "$WORKSPACE":/workspace) —
+            // đã tự verify lỗi thật trên build live: Jenkins agent ở đây chạy bằng
+            // Docker-outside-of-Docker (chỉ mount docker.sock, không phải Docker
+            // lồng Docker), nên `docker run` ở đây thực chất nhờ DAEMON CỦA HOST tạo
+            // container SIBLING — path kiểu "$WORKSPACE" (VD
+            // /var/jenkins_home/workspace/...) chỉ tồn tại BÊN TRONG container
+            // Jenkins, KHÔNG map được sang path thật trên host (-v báo lỗi
+            // "read-only file system" vì host không hề có thư mục đó). Container
+            // Jenkins tự có hostname = chính container ID của nó (Docker mặc định) —
+            // --volumes-from "$HOSTNAME" mượn lại NGUYÊN mount hiện có của chính nó
+            // (đã tự verify bằng tay: `docker run --volumes-from <jenkins-id> node:22
+            // node --version` chạy được, thấy đúng file) — né hẳn việc phải biết path
+            // thật trên host.
             stage('Build Agent Binaries') {
                 when {
                     expression { return config.buildAgentBinaries == true }
@@ -150,8 +164,8 @@ def call(Map config) {
                         try {
                             sh '''
                                 docker run --rm \
-                                    -v "$WORKSPACE":/workspace \
-                                    -w /workspace \
+                                    --volumes-from "$HOSTNAME" \
+                                    -w "$WORKSPACE" \
                                     node:22-slim \
                                     sh -c "npm ci && npm run build:binaries"
                             '''
