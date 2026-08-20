@@ -188,6 +188,19 @@ def call(Map config) {
                             // đã tự chạy thật + verify qua WebSocket test trực tiếp (mode
                             // "cloud", không cần display) trước khi đưa vào đây — không đoán
                             // suông.
+                            // macOS: pkg cảnh báo sẵn "mandatory code signing requirement" —
+                            // Mach-O CHƯA KÝ bị chính kernel macOS (đặc biệt Apple Silicon) từ
+                            // chối chạy thẳng, KHÁC hẳn cảnh báo Gatekeeper thông thường (user
+                            // thật đã tự gặp: "Apple could not verify..." không mở được kể cả
+                            // right-click Open — bản macOS mới đã bỏ luôn cách bypass đó). Ký
+                            // ad-hoc bằng `ldid` (build tĩnh Linux, tải thẳng bằng Node fetch có
+                            // sẵn — không cần cài thêm curl/apt-get) đủ để qua được, KHÔNG cần
+                            // tài khoản Apple Developer trả phí (đó là notarization đầy đủ, mức
+                            // cao hơn, để dành sau khi phát hành thật rộng rãi). Ký CẢ backend
+                            // (dist/clickai-mcp-macos-*, trước khi nhúng — để bản trích xuất ra
+                            // lúc chạy thật cũng mang đúng chữ ký) LẪN launcher (sau khi build).
+                            // Đã tự verify: ldid -S xong, `file`/`ldid -h` xác nhận CodeDirectory/
+                            // CDHash thật được gắn vào, không phải chạy suông không hiệu lực.
                             sh '''
                                 docker run --rm \
                                     --volumes-from "$HOSTNAME" \
@@ -196,6 +209,9 @@ def call(Map config) {
                                     sh -c "
                                         npm ci &&
                                         npm run build:binaries &&
+                                        node scripts/download-ldid.mjs &&
+                                        ldid -S dist/clickai-mcp-macos-x64 &&
+                                        ldid -S dist/clickai-mcp-macos-arm64 &&
                                         cd neutralino-shell &&
                                         npm ci &&
                                         npx neu update &&
@@ -207,11 +223,13 @@ def call(Map config) {
                                         cp ../dist/clickai-mcp-macos-x64 resources/backend/agent-backend &&
                                         chmod +x resources/backend/agent-backend &&
                                         npx neu build --release --embed-resources &&
+                                        ldid -S dist/ClickAI-Filesystem-Agent/ClickAI-Filesystem-Agent-mac_x64 &&
                                         cp dist/ClickAI-Filesystem-Agent/ClickAI-Filesystem-Agent-mac_x64 ../release-bundles/ClickAI-Filesystem-Agent-macos-x64 &&
                                         rm -rf dist resources/backend/agent-backend &&
                                         cp ../dist/clickai-mcp-macos-arm64 resources/backend/agent-backend &&
                                         chmod +x resources/backend/agent-backend &&
                                         npx neu build --release --embed-resources &&
+                                        ldid -S dist/ClickAI-Filesystem-Agent/ClickAI-Filesystem-Agent-mac_arm64 &&
                                         cp dist/ClickAI-Filesystem-Agent/ClickAI-Filesystem-Agent-mac_arm64 ../release-bundles/ClickAI-Filesystem-Agent-macos-arm64 &&
                                         rm -rf dist resources/backend/agent-backend &&
                                         cp ../dist/clickai-mcp-linux-x64 resources/backend/agent-backend &&
