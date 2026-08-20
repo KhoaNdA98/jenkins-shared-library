@@ -162,45 +162,38 @@ def call(Map config) {
                 steps {
                     script {
                         try {
-                            // Backend (Node, đóng gói qua pkg — không đổi) build 1 lần cho cả 4
-                            // platform như cũ. Rồi tới neutralino-shell/ — launcher native (cửa
-                            // sổ + tray) mỏng. `neu build` KHÔNG compile gì (tự tải binary
-                            // framework build sẵn), build được luôn trong image node:22-slim,
-                            // không cần thêm lib GTK/WebKit gì ở bước ĐÓNG GÓI này (chỉ cần lúc
-                            // CHẠY thật trên máy có desktop).
-                            //
-                            // Bản đầu archive launcher + resources.neu + backend làm 3 file
-                            // rời (sau đó gói tạm thành zip) — user phản hồi thật vẫn thấy bất
-                            // tiện phải tải/giải nén. Giờ dùng `neu build --embed-resources`:
-                            // nhúng THẲNG backend vào launcher, ra ĐÚNG 1 file thật thi hành
-                            // cho mỗi platform — launcher tự giải nén backend ra
-                            // os.getPath('data') lúc khởi động lần đầu rồi spawn từ đó (xem
+                            // Backend (Node, đóng gói qua pkg) build cho Windows/Linux — CHỦ Ý
+                            // KHÔNG còn macOS nữa (xem quyết định dưới). Rồi tới neutralino-shell/
+                            // — launcher native (cửa sổ + tray) mỏng, `neu build` KHÔNG compile gì
+                            // (tự tải binary framework build sẵn), build được luôn trong image
+                            // node:22-slim, không cần thêm lib GTK/WebKit ở bước ĐÓNG GÓI này (chỉ
+                            // cần lúc CHẠY thật trên máy có desktop). `neu build --embed-resources`
+                            // nhúng THẲNG backend vào launcher, ra ĐÚNG 1 file thật thi hành cho
+                            // mỗi platform — launcher tự giải nén backend ra os.getPath('data')
+                            // lúc khởi động lần đầu rồi spawn từ đó (xem
                             // neutralino-shell/resources/js/main.js's extractBackend()). Vì
-                            // `neu build` không có flag chọn platform (luôn build đủ 7 kiến
-                            // trúc dùng CHUNG 1 bộ resources/ mỗi lần gọi), phải chạy riêng 4
-                            // lần, mỗi lần đổi backend nào nằm trong
-                            // resources/backend/agent-backend(.exe) trước khi build, rồi chỉ
-                            // lấy đúng 1 launcher cần, bỏ 6 cái còn lại — chấp nhận build 4 lần
-                            // (chỉ là copy/nhúng file, không compile gì, đủ nhanh).
+                            // `neu build` không có flag chọn platform (luôn build đủ 7 kiến trúc
+                            // dùng CHUNG 1 bộ resources/ mỗi lần gọi), phải chạy riêng cho từng
+                            // platform, mỗi lần đổi backend nào nằm trong
+                            // resources/backend/agent-backend(.exe) trước khi build, rồi chỉ lấy
+                            // đúng 1 launcher cần.
                             //
-                            // Toàn bộ luồng (bao gồm chuỗi lệnh copy/build/copy 4 vòng y hệt
-                            // bên dưới, VÀ logic extractFile→chmod→spawnProcess trong main.js)
-                            // đã tự chạy thật + verify qua WebSocket test trực tiếp (mode
-                            // "cloud", không cần display) trước khi đưa vào đây — không đoán
-                            // suông.
-                            // macOS: pkg cảnh báo sẵn "mandatory code signing requirement" —
-                            // Mach-O CHƯA KÝ bị chính kernel macOS (đặc biệt Apple Silicon) từ
-                            // chối chạy thẳng, KHÁC hẳn cảnh báo Gatekeeper thông thường (user
-                            // thật đã tự gặp: "Apple could not verify..." không mở được kể cả
-                            // right-click Open — bản macOS mới đã bỏ luôn cách bypass đó). Ký
-                            // ad-hoc bằng `ldid` (build tĩnh Linux, tải thẳng bằng Node fetch có
-                            // sẵn — không cần cài thêm curl/apt-get) đủ để qua được, KHÔNG cần
-                            // tài khoản Apple Developer trả phí (đó là notarization đầy đủ, mức
-                            // cao hơn, để dành sau khi phát hành thật rộng rãi). Ký CẢ backend
-                            // (dist/clickai-mcp-macos-*, trước khi nhúng — để bản trích xuất ra
-                            // lúc chạy thật cũng mang đúng chữ ký) LẪN launcher (sau khi build).
-                            // Đã tự verify: ldid -S xong, `file`/`ldid -h` xác nhận CodeDirectory/
-                            // CDHash thật được gắn vào, không phải chạy suông không hiệu lực.
+                            // Quyết định KHÔNG build macOS nữa (cả backend lẫn launcher): user
+                            // test thật trên Mac M1 gặp macOS chặn hẳn (kernel từ chối Mach-O
+                            // chưa ký + Gatekeeper chặn file tải từ Internet dù đã ký ad-hoc bằng
+                            // ldid) — cần Apple notarize thật (trả phí $99/năm) mới hết bị chặn
+                            // hoàn toàn, ClickAI chưa quyết định đầu tư việc đó. Thay vào đó
+                            // macOS dùng đường 'npx clickai-mcp-filesystem' (chạy qua chính node
+                            // đã được Apple/Node.js tin tưởng sẵn, không phải "chạy 1 binary lạ"
+                            // nên không bị Gatekeeper chặn — đã publish thật lên npm registry,
+                            // verify chạy được). Xoá hẳn bước ldid/notarize khỏi CI vì không còn
+                            // build binary macOS nào nữa để ký.
+                            //
+                            // Tên file output pkg đổi khi bớt xuống còn 2 target (linux/win): pkg
+                            // chỉ thêm hậu tố kiến trúc (-x64) khi CÓ NHIỀU HƠN 1 biến thể cho
+                            // cùng 1 OS cần phân biệt — giờ mỗi OS chỉrun đúng 1 biến thể nên pkg
+                            // tự bỏ hậu tố (clickai-mcp-win.exe, clickai-mcp-linux — đã tự verify
+                            // build thật để xác nhận tên chính xác, không đoán suông).
                             sh '''
                                 docker run --rm \
                                     --volumes-from "$HOSTNAME" \
@@ -209,30 +202,15 @@ def call(Map config) {
                                     sh -c "
                                         npm ci &&
                                         npm run build:binaries &&
-                                        node scripts/download-ldid.mjs &&
-                                        ldid -S dist/clickai-mcp-macos-x64 &&
-                                        ldid -S dist/clickai-mcp-macos-arm64 &&
                                         cd neutralino-shell &&
                                         npm ci &&
                                         npx neu update &&
                                         mkdir -p ../release-bundles resources/backend &&
-                                        cp ../dist/clickai-mcp-win-x64.exe resources/backend/agent-backend.exe &&
+                                        cp ../dist/clickai-mcp-win.exe resources/backend/agent-backend.exe &&
                                         npx neu build --release --embed-resources &&
                                         cp dist/ClickAI-Filesystem-Agent/ClickAI-Filesystem-Agent-win_x64.exe ../release-bundles/ClickAI-Filesystem-Agent-windows-x64.exe &&
                                         rm -rf dist resources/backend/agent-backend.exe &&
-                                        cp ../dist/clickai-mcp-macos-x64 resources/backend/agent-backend &&
-                                        chmod +x resources/backend/agent-backend &&
-                                        npx neu build --release --embed-resources &&
-                                        ldid -S dist/ClickAI-Filesystem-Agent/ClickAI-Filesystem-Agent-mac_x64 &&
-                                        cp dist/ClickAI-Filesystem-Agent/ClickAI-Filesystem-Agent-mac_x64 ../release-bundles/ClickAI-Filesystem-Agent-macos-x64 &&
-                                        rm -rf dist resources/backend/agent-backend &&
-                                        cp ../dist/clickai-mcp-macos-arm64 resources/backend/agent-backend &&
-                                        chmod +x resources/backend/agent-backend &&
-                                        npx neu build --release --embed-resources &&
-                                        ldid -S dist/ClickAI-Filesystem-Agent/ClickAI-Filesystem-Agent-mac_arm64 &&
-                                        cp dist/ClickAI-Filesystem-Agent/ClickAI-Filesystem-Agent-mac_arm64 ../release-bundles/ClickAI-Filesystem-Agent-macos-arm64 &&
-                                        rm -rf dist resources/backend/agent-backend &&
-                                        cp ../dist/clickai-mcp-linux-x64 resources/backend/agent-backend &&
+                                        cp ../dist/clickai-mcp-linux resources/backend/agent-backend &&
                                         chmod +x resources/backend/agent-backend &&
                                         npx neu build --release --embed-resources &&
                                         cp dist/ClickAI-Filesystem-Agent/ClickAI-Filesystem-Agent-linux_x64 ../release-bundles/ClickAI-Filesystem-Agent-linux-x64 &&
@@ -241,7 +219,7 @@ def call(Map config) {
                                     "
                             '''
                             archiveArtifacts artifacts: 'release-bundles/*', fingerprint: true, allowEmptyArchive: true
-                            echo "✅ Built & archived 4 self-contained launcher binaries (1 file/platform, backend nhúng sẵn)."
+                            echo "✅ Built & archived self-contained launcher binaries cho Windows + Linux (macOS dùng npx, xem ghi chú)."
                         } catch (Exception e) {
                             echo "⚠️ Agent binaries build failed (không ảnh hưởng deploy gateway đã xong ở stage trước): ${e.message}"
                             currentBuild.result = 'UNSTABLE'
