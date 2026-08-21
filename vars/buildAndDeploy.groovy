@@ -79,68 +79,26 @@ def call(Map config) {
                     }
                 }
             }
-            
-            stage('Prepare Environment') {
-                when {
-                    expression { return config.envFile == true }
-                }
-                steps {
-                    script {
-                        if (config.envContent) {
-                            def envPath = config.envFilePath ?: './.env'
-                            writeFile file: envPath, text: config.envContent
-                            echo "Environment file created at: ${envPath}"
-                        }
-                    }
-                }
-            }
-            
-            stage('Build Image') {
-                steps {
-                    script {
-                        dockerBuild(config, pipelineConfig)
-                    }
-                }
-            }
-            
-            stage('Push Image') {
-                steps {
-                    script {
-                        dockerPushImage(config, pipelineConfig, envConfig)
-                    }
-                }
-            }
-            
-            stage('Deploy') {
-                when {
-                    expression { return config.skipDeploy != true }
-                }
-                steps {
-                    script {
-                        deployApplication(config, pipelineConfig, envConfig)
-                    }
-                }
-            }
-            
-            stage('Post Deploy Verification') {
-                when {
-                    expression { return config.skipDeploy != true && config.healthCheckUrl }
-                }
-                steps {
-                    script {
-                        healthCheck(config)
-                    }
-                }
-            }
 
             // Optional, opt-in stage — chỉ chạy khi job truyền config.buildAgentBinaries
             // = true. Mọi job KHÔNG set flag này (mặc định) đi qua stage này y hệt bản
             // cũ, hoàn toàn không đổi hành vi — thêm an toàn cho các job khác đang dùng
-            // chung thư viện. Đóng gói mcp-server/ (Node.js) thành 4 binary độc lập
-            // (win/mac-x64/mac-arm64/linux) không liên quan gì Docker/K8s ở trên, nên
-            // build trong 1 container node:22 tạm thời (agent Jenkins không có sẵn
-            // Node.js) — lỗi ở stage này KHÔNG được làm fail cả pipeline (đã deploy
-            // gateway xong ở stage trước là quan trọng nhất, build binary là phụ).
+            // chung thư viện. Đóng gói mcp-server/ (Node.js) thành binary Windows/Linux
+            // không liên quan gì Docker/K8s ở dưới, nên build trong 1 container node:22
+            // tạm thời (agent Jenkins không có sẵn Node.js) — lỗi ở stage này KHÔNG được
+            // làm fail cả pipeline (đánh dấu UNSTABLE, để 'Build Image'/'Deploy' vẫn chạy
+            // tiếp — deploy gateway là quan trọng nhất, build binary là phụ).
+            //
+            // VỊ TRÍ STAGE (đã sửa — trước đây đứng SAU CÙNG, sau cả 'Deploy'): bug thật
+            // user report ("Downloads not available yet" dù Windows đã build xong) —
+            // root cause là 2 lỗi cộng dồn: (1) stage này trước đây chỉ archiveArtifacts
+            // lên Jenkins, KHÔNG hề copy vào backend/public/download/ để Dockerfile's
+            // `COPY backend ./backend` đóng gói theo, và (2) dù có copy thì cũng đã TRỄ —
+            // 'Build Image' chạy TRƯỚC stage này nên image build ra không thể chứa file
+            // chưa tồn tại. Dời hẳn lên đây (ngay sau Checkout, TRƯỚC 'Build Image') +
+            // thêm bước copy thẳng vào $WORKSPACE/backend/public/download/ bên dưới —
+            // giờ file có mặt trong workspace TRƯỚC khi Docker build đọc, tự động lọt vào
+            // image qua COPY backend ./backend sẵn có, không cần sửa gì Dockerfile.
             //
             // --volumes-from "$HOSTNAME" (KHÔNG dùng -v "$WORKSPACE":/workspace) —
             // đã tự verify lỗi thật trên build live: Jenkins agent ở đây chạy bằng
@@ -194,6 +152,13 @@ def call(Map config) {
                             // cùng 1 OS cần phân biệt — giờ mỗi OS chỉrun đúng 1 biến thể nên pkg
                             // tự bỏ hậu tố (clickai-mcp-win.exe, clickai-mcp-linux — đã tự verify
                             // build thật để xác nhận tên chính xác, không đoán suông).
+                            //
+                            // Copy CẢ VÀO ../backend/public/download/ (mới, cùng tên file mà
+                            // backend/src/routes/mcp.js's GET /api/mcp/download/:platform matcher
+                            // đang dò — xem ghi chú ở đó) — để Docker COPY backend ./backend ở
+                            // stage 'Build Image' ngay sau đây đóng gói theo, khác hẳn
+                            // release-bundles/ (chỉ để archiveArtifacts, tải thủ công qua Jenkins
+                            // UI, không liên quan gì tới app thật đang chạy).
                             sh '''
                                 docker run --rm \
                                     --volumes-from "$HOSTNAME" \
@@ -205,25 +170,81 @@ def call(Map config) {
                                         cd neutralino-shell &&
                                         npm ci &&
                                         npx neu update &&
-                                        mkdir -p ../release-bundles resources/backend &&
+                                        mkdir -p ../release-bundles ../backend/public/download resources/backend &&
                                         cp ../dist/clickai-mcp-win.exe resources/backend/agent-backend.exe &&
                                         npx neu build --release --embed-resources &&
                                         cp dist/ClickAI-Filesystem-Agent/ClickAI-Filesystem-Agent-win_x64.exe ../release-bundles/ClickAI-Filesystem-Agent-windows-x64.exe &&
+                                        cp dist/ClickAI-Filesystem-Agent/ClickAI-Filesystem-Agent-win_x64.exe ../backend/public/download/ClickAI-Filesystem-Agent-windows-x64.exe &&
                                         rm -rf dist resources/backend/agent-backend.exe &&
                                         cp ../dist/clickai-mcp-linux resources/backend/agent-backend &&
                                         chmod +x resources/backend/agent-backend &&
                                         npx neu build --release --embed-resources &&
                                         cp dist/ClickAI-Filesystem-Agent/ClickAI-Filesystem-Agent-linux_x64 ../release-bundles/ClickAI-Filesystem-Agent-linux-x64 &&
                                         chmod +x ../release-bundles/ClickAI-Filesystem-Agent-linux-x64 &&
+                                        cp dist/ClickAI-Filesystem-Agent/ClickAI-Filesystem-Agent-linux_x64 ../backend/public/download/ClickAI-Filesystem-Agent-linux-x64 &&
+                                        chmod +x ../backend/public/download/ClickAI-Filesystem-Agent-linux-x64 &&
                                         rm -rf dist resources/backend/agent-backend
                                     "
                             '''
                             archiveArtifacts artifacts: 'release-bundles/*', fingerprint: true, allowEmptyArchive: true
-                            echo "✅ Built & archived self-contained launcher binaries cho Windows + Linux (macOS dùng npx, xem ghi chú)."
+                            echo "✅ Built self-contained launcher binaries cho Windows + Linux — đã copy vào backend/public/download/ (Docker build ngay sau sẽ đóng gói theo) và archive lên Jenkins (macOS dùng npx, xem ghi chú)."
                         } catch (Exception e) {
-                            echo "⚠️ Agent binaries build failed (không ảnh hưởng deploy gateway đã xong ở stage trước): ${e.message}"
+                            echo "⚠️ Agent binaries build failed (không chặn 'Build Image'/'Deploy' chạy tiếp — thiếu binary chỉ khiến GET /api/mcp/download trả 503/404 như cũ, không ảnh hưởng gateway): ${e.message}"
                             currentBuild.result = 'UNSTABLE'
                         }
+                    }
+                }
+            }
+
+            stage('Prepare Environment') {
+                when {
+                    expression { return config.envFile == true }
+                }
+                steps {
+                    script {
+                        if (config.envContent) {
+                            def envPath = config.envFilePath ?: './.env'
+                            writeFile file: envPath, text: config.envContent
+                            echo "Environment file created at: ${envPath}"
+                        }
+                    }
+                }
+            }
+            
+            stage('Build Image') {
+                steps {
+                    script {
+                        dockerBuild(config, pipelineConfig)
+                    }
+                }
+            }
+            
+            stage('Push Image') {
+                steps {
+                    script {
+                        dockerPushImage(config, pipelineConfig, envConfig)
+                    }
+                }
+            }
+            
+            stage('Deploy') {
+                when {
+                    expression { return config.skipDeploy != true }
+                }
+                steps {
+                    script {
+                        deployApplication(config, pipelineConfig, envConfig)
+                    }
+                }
+            }
+            
+            stage('Post Deploy Verification') {
+                when {
+                    expression { return config.skipDeploy != true && config.healthCheckUrl }
+                }
+                steps {
+                    script {
+                        healthCheck(config)
                     }
                 }
             }
