@@ -136,16 +136,17 @@ def call(Map config) {
                             // resources/backend/agent-backend(.exe) trước khi build, rồi chỉ lấy
                             // đúng 1 launcher cần.
                             //
-                            // Quyết định KHÔNG build macOS nữa (cả backend lẫn launcher): user
-                            // test thật trên Mac M1 gặp macOS chặn hẳn (kernel từ chối Mach-O
-                            // chưa ký + Gatekeeper chặn file tải từ Internet dù đã ký ad-hoc bằng
-                            // ldid) — cần Apple notarize thật (trả phí $99/năm) mới hết bị chặn
-                            // hoàn toàn, ClickAI chưa quyết định đầu tư việc đó. Thay vào đó
-                            // macOS dùng đường 'npx clickai-mcp-filesystem' (chạy qua chính node
-                            // đã được Apple/Node.js tin tưởng sẵn, không phải "chạy 1 binary lạ"
-                            // nên không bị Gatekeeper chặn — đã publish thật lên npm registry,
-                            // verify chạy được). Xoá hẳn bước ldid/notarize khỏi CI vì không còn
-                            // build binary macOS nào nữa để ký.
+                            // CẬP NHẬT: macOS quay lại có bản build thật (ClickAI đã đầu tư Apple
+                            // Developer Program — xem apple-developer-setup.md bên repo
+                            // clickai-mcp-filesystem) — nhưng KHÔNG build ở stage này. Container
+                            // node:22-slim (Linux, Docker-outside-of-Docker) không thể tự build
+                            // .dmg được — cần `hdiutil` (chỉ có trên macOS thật). File .dmg
+                            // (đã ký+notarize+staple) được build ở nơi khác: GitHub Actions job
+                            // "macos-dmg" (repo clickai-mcp-filesystem, chạy trên runner
+                            // macos-latest — máy Apple thật, chỉ trigger khi push tag vX.Y.Z),
+                            // đính vào GitHub Release. Khối try/catch RIÊNG ngay dưới đây
+                            // (fetchMacosDmgFromGithubRelease) chỉ đi LẤY file đã làm sẵn đó về,
+                            // không tự build lại — xem resources/scripts/fetch-macos-dmg.mjs.
                             //
                             // Tên file output pkg đổi khi bớt xuống còn 2 target (linux/win): pkg
                             // chỉ thêm hậu tố kiến trúc (-x64) khi CÓ NHIỀU HƠN 1 biến thể cho
@@ -191,6 +192,40 @@ def call(Map config) {
                         } catch (Exception e) {
                             echo "⚠️ Agent binaries build failed (không chặn 'Build Image'/'Deploy' chạy tiếp — thiếu binary chỉ khiến GET /api/mcp/download trả 503/404 như cũ, không ảnh hưởng gateway): ${e.message}"
                             currentBuild.result = 'UNSTABLE'
+                        }
+
+                        // Lấy file .dmg macOS (đã ký+notarize+staple sẵn) từ GitHub Release mới
+                        // nhất — xem ghi chú "CẬP NHẬT" ở khối build Win/Linux phía trên để biết
+                        // vì sao KHÔNG tự build .dmg ngay tại đây được. Tách hẳn try/catch riêng
+                        // với khối Win/Linux ở trên: 2 việc độc lập nhau, macOS chưa có Release
+                        // nào (VD lần đầu bật tính năng này, hoặc job macos-dmg đang chạy dở) thì
+                        // KHÔNG được kéo theo làm hỏng luôn cả Windows/Linux đã build thành công.
+                        try {
+                            def githubRepo = config.repo
+                                .replaceAll(/^https?:\/\/github\.com\//, '')
+                                .replaceAll(/\.git$/, '')
+                            def credId = config.credentialsId ?: 'git-credentials'
+
+                            writeFile file: "${env.WORKSPACE}/fetch-macos-dmg.mjs", text: libraryResource('scripts/fetch-macos-dmg.mjs')
+
+                            withCredentials([string(credentialsId: credId, variable: 'GIT_TOKEN')]) {
+                                sh """
+                                    docker run --rm \\
+                                        --volumes-from "\$HOSTNAME" \\
+                                        -w "\$WORKSPACE" \\
+                                        -e GIT_TOKEN \\
+                                        -e GITHUB_REPO="${githubRepo}" \\
+                                        -e OUT_DIR="\$WORKSPACE/backend/public/download" \\
+                                        node:22-slim \\
+                                        node fetch-macos-dmg.mjs
+                                """
+                            }
+                            echo "✅ Đã lấy .dmg macOS mới nhất từ GitHub Release, copy vào backend/public/download/ (Docker build ngay sau sẽ đóng gói theo)."
+                        } catch (Exception e) {
+                            echo "⚠️ Không lấy được .dmg macOS từ GitHub Release (không chặn 'Build Image'/'Deploy' chạy tiếp — thiếu file chỉ khiến GET /api/mcp/download/mac trả 404 như trước, Windows/Linux vẫn phục vụ bình thường): ${e.message}"
+                            currentBuild.result = 'UNSTABLE'
+                        } finally {
+                            sh "rm -f '${env.WORKSPACE}/fetch-macos-dmg.mjs'"
                         }
                     }
                 }
