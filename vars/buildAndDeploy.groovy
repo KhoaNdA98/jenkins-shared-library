@@ -172,12 +172,12 @@ def call(Map config) {
                                         npm ci &&
                                         npx neu update &&
                                         mkdir -p ../release-bundles ../backend/public/download resources/backend &&
-                                        cp ../dist/clickai-mcp-win.exe resources/backend/agent-backend.exe &&
+                                        cp ../dist/clickai-mcp-win*.exe resources/backend/agent-backend.exe &&
                                         npx neu build --release --embed-resources &&
                                         cp dist/ClickAI-Filesystem-Agent/ClickAI-Filesystem-Agent-win_x64.exe ../release-bundles/ClickAI-Filesystem-Agent-windows-x64.exe &&
                                         cp dist/ClickAI-Filesystem-Agent/ClickAI-Filesystem-Agent-win_x64.exe ../backend/public/download/ClickAI-Filesystem-Agent-windows-x64.exe &&
                                         rm -rf dist resources/backend/agent-backend.exe &&
-                                        cp ../dist/clickai-mcp-linux resources/backend/agent-backend &&
+                                        cp ../dist/clickai-mcp-linux* resources/backend/agent-backend &&
                                         chmod +x resources/backend/agent-backend &&
                                         npx neu build --release --embed-resources &&
                                         cp dist/ClickAI-Filesystem-Agent/ClickAI-Filesystem-Agent-linux_x64 ../release-bundles/ClickAI-Filesystem-Agent-linux-x64 &&
