@@ -24,6 +24,10 @@ def call(Map config, Map pipelineConfig, def envConfig) {
                 kubernetesRollout(config, pipelineConfig, envConfig)
                 break
                 
+            case 'gitops':
+                gitopsDeploy(config, pipelineConfig)
+                break
+
             case 'kubernetes-manifest':
                 kubernetesApplyManifest(config, pipelineConfig, envConfig)
                 break
